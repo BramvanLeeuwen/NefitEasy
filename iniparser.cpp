@@ -12,13 +12,13 @@ using namespace std;
 
 
 bool ReadIniFile()
-{  string str_access,str_passw,str_serial;
-   if (!ReadIniFile(str_access,str_passw,str_serial))
-       return false;
-   setenv(NEFIT_AK,str_access.c_str(),1);
-   setenv(NEFIT_PW,str_passw.c_str(),1);
-   setenv(NEFIT_SN,str_serial.c_str(),1);
-   return true;
+{   string str_access,str_passw,str_serial;
+    if (!ReadIniFile(str_access,str_passw,str_serial))
+        return false;
+    setenv(NEFIT_AK,str_access.c_str(),1);
+    setenv(NEFIT_PW,str_passw.c_str(),1);
+    setenv(NEFIT_SN,str_serial.c_str(),1);
+    return true;
 }
 
 bool ReadIniFile(string& str_access,string& str_passw,string& str_serial)
@@ -41,18 +41,18 @@ bool ReadIniFile(string& str_access,string& str_passw,string& str_serial)
 
 
 bool ReadIniString(string& key, string& result, ifstream& inputstream)
-   {  size_t pos;
+    { size_t pos;
       string::size_type l,eq_pos;
       string line;
       pos=0;
       while(inputstream.good() && pos!=string::npos)
-      {pos=0;
-       getline(inputstream,line); // get line from file
-       line.erase(line.find_first_of(";"));   //comment, begins with semicolon
-       pos=line.find(key); // search
-       eq_pos=line.find_first_of('=');
-       if ((pos != string::npos ) && (eq_pos!=string::npos) ) // string::npos is returned if string is not found
-       {	l=line.find_first_of('"');
+      { pos=0;
+        getline(inputstream,line); // get line from file
+        line.erase(line.find_first_of(";"));   //comment, begins with semicolon
+        pos=line.find(key); // search
+        eq_pos=line.find_first_of('=');
+        if ((pos != string::npos ) && (eq_pos!=string::npos) ) // string::npos is returned if string is not found
+        {	l=line.find_first_of('"');
             if(l==string::npos)  //quotation not found
                  line=line.substr(eq_pos+1,string::npos);
             else
