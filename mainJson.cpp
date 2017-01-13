@@ -130,7 +130,7 @@ int main(int argc, char **argv)
 //    printf("JSON string: %s\n", string);
 //    json_object * jobj = json_tokener_parse(string);
 //    json_parse(jobj);
-
+//
 	if (!serial_number || !access_key || !password) {
 		printf("The following environmental variabled must be set\n");
         printf("c.q. an inifile "INIFILE_NAME" must be present\n");
