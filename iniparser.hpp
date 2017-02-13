@@ -9,6 +9,7 @@
 #define NEFIT_AK        "NEFIT_ACCESS_KEY"
 #define NEFIT_PW        "NEFIT_PASSWORD"
 #define NEFIT_SN        "NEFIT_SERIAL_NUMBER"
+#define NEFIT_LP        "LISTEN_PORT"
 
 using namespace std;
 bool ReadIniFile();

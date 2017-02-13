@@ -5,17 +5,26 @@
 //#include <QString>
 #include <json-c/json.h>
 #include <string>
-
+//#include <sstream>
+#include <iostream>
 
 #include <sys/queue.h>
 
 #include <json-c/json.h>
 #include <openssl/aes.h>
 #include <strophe.h>
+#include <sys/socket.h>
+#include <unistd.h>    //sleep function
+
 
 #include "easyheader.hpp"
 #include <jsonparser.hpp>
 #include <iniparser.hpp>
+#include <Tcp.hpp>
+
+#define NUM_THREADS 1
+
+void *PrintErrorThread(void *threadarg);
 
 /* see https://github.com/robertklep/nefit-easy-core/wiki/List-of-endpoints */
 const char *paths[] = {
@@ -108,14 +117,29 @@ const char *paths[] = {
 	NULL
 };
 
+int          client_tcpsocket,tcp_ip_port;
+sockaddr	 pin;
+bool		 tcpserver_connected;  //true when tcp socket is bound to external socket
+TcpClient	 tcpclient;
+bool		 keepThreadsRunning;
+unsigned int nrRunningThreads;
 
-
+struct thread_data{
+   int   thread_id;
+   char  *message;
+   float *floatingpoint;
+};
 
 int main(int argc, char **argv)
 {
 	struct nefit_easy easy;
 	char const **path;
     char *serial_number=NULL, *access_key=NULL, *password=NULL;
+    struct thread_data 	td[NUM_THREADS];
+    pthread_t threads[NUM_THREADS];
+    int 	rc, i;
+    tcpserver_connected=false;
+    keepThreadsRunning= true;
 
     EASY_UNUSED(argc);
     EASY_UNUSED(argv);
@@ -158,10 +182,42 @@ int main(int argc, char **argv)
 
 	/* shutdown lib */
 	xmpp_shutdown();
+    nrRunningThreads  = 0;
+    for(i=0; i < NUM_THREADS; i++ ){
+       //printf("main() : creating thread,%i \n\r " ,i);
+        td[i].thread_id = i;
+        td[i].message   =(char*) "Started up";
+        nrRunningThreads++;
+        switch (i){
+            case 0: rc = pthread_create(&threads[i], NULL,	TcpServerThread,	(void *)&td[i]);
+                            break;
+            default:rc = pthread_create(&threads[i], NULL,  PrintErrorThread,	(void *)&td[i]);
+                            break;
+        }
+        if (rc){
+        printf("main() : Error:unable to create thread,%i \n\r", rc );
+        exit(-1);
+        }
+    }
+    while (keepThreadsRunning)   //keep main thread running until serverthread is closed by client oder "Close"
+    {sleep(2);};
 
-	return 0;
+    //sleep(50);
+    cout << "Joining threads with main: ";
+    return 1;
 }
 
 
+void *PrintErrorThread(void *threadarg)
+{
+  struct thread_data *my_data;
 
+  my_data = (struct thread_data *) threadarg;
+  my_data=my_data;  //junk code to appease the compiler
+  //sprintf(log_string, "Thread ID : %i  Message : %s", my_data->thread_id ,my_data->message);
+  //log_cl(log_string);
+  nrRunningThreads--;
+  pthread_exit(NULL);
+  return NULL;
+}
 

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE QtCreatorProject>
-<!-- Written by QtCreator 3.0.1, 2017-01-13T08:45:16. -->
+<!-- Written by QtCreator 3.0.1, 2017-02-13T21:32:42. -->
 <qtcreator>
  <data>
   <variable>ProjectExplorer.Project.ActiveTarget</variable>
@@ -113,6 +113,7 @@
      <value type="QString">NEFIT_SERIAL_NUMBER=401011710</value>
      <value type="QString">NEFIT_ACCESS_KEY=dVyP7CBmYcvmpSdC</value>
      <value type="QString">NEFIT_PASSWORD=Ada1950Bram</value>
+     <value type="QString">LISTEN_PORT=4008</value>
     </valuelist>
     <value type="QString" key="ProjectExplorer.ProjectConfiguration.DefaultDisplayName">Debug</value>
     <value type="QString" key="ProjectExplorer.ProjectConfiguration.DisplayName"></value>
