@@ -9,4 +9,5 @@ INCLUDEPATH += /usr/include/c++/4.8 /usr/include/i386-linux-gnu/c++/4.8
 HEADERS += easyheader.hpp \
     jsonparser.hpp \
     iniparser.hpp \
-    Tcp.hpp
+    Tcp.hpp \
+    main.hpp

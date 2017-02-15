@@ -17,12 +17,12 @@ char     tcpserver_incoming_message[TCP_MESSBUF_SIZE];  // buffer used for incom
 char     tcpserver_outgoing_message[TCP_MESSBUF_SIZE];  // and buffer for outgoing data
 extern char     client_tcpsocket;
 extern TcpClient	tcpclient;
-int                 tcpserver_internal_portnr=-1;
+extern int          tcpserver_internal_portnr;
 extern bool         tcpserver_connected; //true when tcp socket is bound to external socket
 extern bool         keepThreadsRunning;
 extern unsigned int nrRunningThreads;
 extern sockaddr     pin;
-int                 socket_descriptor_current;
+extern int          socket_descriptor_current;
 
 
 
@@ -46,7 +46,6 @@ void *TcpServerThread(void *threadarg) //creates a blocking tcp server
 
     i=0;
     do {      // bind the socket to the port number
-        //sockin.sin_port 	= htons(TCP_IP_PORT+i);  //Host TO Network Short :Convert port number to "network byte order" MOST SIGNIFICANT BYTE FIRST
         sockin.sin_port 	= htons(TCP_IP_PORT+i);  //Host TO Network Short :Convert port number to "network byte order" MOST SIGNIFICANT BYTE FIRST
         bound= (bind (listening_socket, (__CONST_SOCKADDR_ARG)&sockin, sizeof(sockin)) == 0);
     }	while (++i<=4 && !bound );
@@ -137,7 +136,7 @@ void *TcpServerThread(void *threadarg) //creates a blocking tcp server
     close(listening_socket);
     tcpclient.Close();
     nrRunningThreads--;
-    cout<<"TCP Listening client socket closed; ";
+    cout<<"TCP Listening server socket closed; ";
     pthread_exit(NULL);
     return NULL;
 }

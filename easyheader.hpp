@@ -38,6 +38,9 @@ int easy_put_object(struct nefit_easy *easy, char const *url, json_object *obj);
 int easy_put_double(struct nefit_easy *easy, char const *url, double value);
 int easy_put_string(struct nefit_easy *easy, char const *url, char const *value);
 
+
+
+
 /*
 
 #include <sys/queue.h>

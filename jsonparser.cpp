@@ -15,12 +15,11 @@ void value_obtained(struct nefit_easy *easy, json_object *obj)
     string strg;
     struct json_object *subobj;
 
-
     /* Allocate room for the string. */
     str = (char *)malloc(sizeof(char) * (strlen(json_object_to_json_string(obj)) + 1));
     /* Copy the contents of the string. */
     strcpy(str, json_object_to_json_string(obj));
-    putenv((char*)"NEFIT_ROOMTEMP='21.0'");
+    //putenv((char*)"NEFIT_ROOMTEMP='21.0'");
 
 
 
