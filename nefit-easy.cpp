@@ -11,7 +11,7 @@
 
 #include <nefit-easy.h>
 
-static void request_done(struct nefit_easy* easy);
+static void request_done(struct nefit_easy *easy);
 
 const unsigned char magic[] = {
 	0x58, 0xf1, 0x8d, 0x70, 0xf6, 0x67, 0xc9, 0xc7,
@@ -35,7 +35,12 @@ static void generate_key(char const *uuid, char const *password, unsigned char *
 	MD5_Final(&key[16], &context);
 }
 
-static void decrypt(struct nefit_easy *easy, unsigned char const *encrypted, size_t len, char *out)
+/*
+ * Decrypts the payload (HTTP response).
+ * This depends on the password of the user.
+*/
+static void decrypt(struct nefit_easy *easy, unsigned char const *encrypted,
+					size_t len, char *out)
 {
 	unsigned char const *s = encrypted;
 	unsigned char *d = (unsigned char *) out;
@@ -48,11 +53,53 @@ static void decrypt(struct nefit_easy *easy, unsigned char const *encrypted, siz
 	}
 }
 
+/*
+ * Encrypts the payload (HTTP response).
+ * This depends on the password of the user.
+ *
+ * @note the return value must be freed
+*/
+static unsigned char *encrypt(struct nefit_easy *easy, unsigned char const *plaintext,
+							  size_t len, size_t *encrypted_len)
+{
+	unsigned char *padded, *encrypted;
+	size_t c = 0, padding;
+
+	padding = (16 - (len % 16)) % 16;
+	*encrypted_len = len + padding;
+    padded = (unsigned char*)malloc(*encrypted_len);
+	if (padded == NULL)
+		return NULL;
+
+    encrypted = (unsigned char*)malloc(*encrypted_len);
+	if (encrypted == NULL) {
+		free(padded);
+		return NULL;
+	}
+
+	memcpy(padded, plaintext, len);
+	memset(&padded[len], 0, padding);
+
+	while (c < *encrypted_len)
+	{
+		AES_ecb_encrypt(&padded[c], &encrypted[c], &easy->aesKeyEnc, AES_ENCRYPT);
+		c += 16;
+	}
+
+	free(padded);
+
+	return encrypted;
+}
+
+/*
+ * Initializes the encryption for payload (HTTP request / response).
+ * This depends on the password of the user.
+ */
 static int encyption_init(struct nefit_easy *easy, char const *uuid, char const *password)
 {
-    unsigned char key[32];
-    generate_key(uuid, password, key);
-    AES_set_encrypt_key(key, 256, &easy->aesKeyEnc);
+	unsigned char key[32];
+	generate_key(uuid, password, key);
+	AES_set_encrypt_key(key, 256, &easy->aesKeyEnc);
 	AES_set_decrypt_key(key, 256, &easy->aesKeyDec);
 	return 0;
 }
@@ -64,9 +111,10 @@ static int get_request_hander(xmpp_conn_t *conn, xmpp_stanza_t *stanza, void *us
 	xmpp_stanza_t *body;
 	char *intext;
 	char *content = NULL, *decoded = NULL;
-	unsigned char *rawEncoded;
+	unsigned char *rawEncoded = NULL;
 	size_t raw_encoded_len;
 	json_object *new_obj;
+	int http_code;
 	EASY_UNUSED(conn);
 
 	body = xmpp_stanza_get_child_by_name(stanza, "body");
@@ -74,12 +122,18 @@ static int get_request_hander(xmpp_conn_t *conn, xmpp_stanza_t *stanza, void *us
 		return 1;
 
 	intext = xmpp_stanza_get_text(body);
+	if (sscanf(intext, "HTTP/1.0 %d", &http_code) != 1)
+		goto out;
+
 	content = strstr(intext, "\n\n");
 
 	if (content == NULL)
 		goto out;
 
-	xmpp_base64_decode_bin(ctx, &content[2], strlen(&content[2]), &rawEncoded, &raw_encoded_len);
+	xmpp_base64_decode_bin(ctx, &content[2], strlen(&content[2]), &rawEncoded,
+						   &raw_encoded_len);
+	if (rawEncoded == NULL)
+		goto out;
 	decoded = (char *) malloc(raw_encoded_len);
 	if (decoded == NULL)
 		goto out;
@@ -88,21 +142,25 @@ static int get_request_hander(xmpp_conn_t *conn, xmpp_stanza_t *stanza, void *us
 	new_obj = json_tokener_parse(decoded);
 	if (easy->cb)
 		easy->cb(easy, new_obj);
+	json_object_put(new_obj);
 
 out:
+	free(decoded);
 	xmpp_free(ctx, intext);
+	xmpp_free(ctx, rawEncoded);
 	request_done(easy);
 
 	return 1;
 }
 
-static void send_stanza(struct nefit_easy* easy, xmpp_stanza_t *message)
+static void send_stanza(struct nefit_easy *easy, xmpp_stanza_t *message)
 {
 	easy->busy = 1;
 	xmpp_send(easy->xmpp_conn, message);
 }
 
-static int easy_get_it(struct nefit_easy* easy)
+/* The actual processing of a queued HTTP request */
+static int easy_get_it(struct nefit_easy *easy)
 {
 	xmpp_stanza_t *message, *body, *data;
 	xmpp_ctx_t *ctx = easy->xmpp_ctx;
@@ -122,8 +180,6 @@ static int easy_get_it(struct nefit_easy* easy)
 
 	data = xmpp_stanza_new(ctx);
 	xmpp_stanza_set_text(data, req->http_req);
-    //printf("\n%s\n", req->description);
-    //printf("-------------------------------------------------------------------\n");
 	xmpp_stanza_add_child(body, data);
 	xmpp_stanza_release(data);
 
@@ -133,7 +189,8 @@ static int easy_get_it(struct nefit_easy* easy)
 	return 1;
 }
 
-static void check_pending_work(struct nefit_easy* easy)
+/* continue with the next request if any */
+static void check_pending_work(struct nefit_easy *easy)
 {
 	if (easy->busy || !easy->connected)
 		return;
@@ -144,7 +201,8 @@ static void check_pending_work(struct nefit_easy* easy)
 	easy_get_it(easy);
 }
 
-static void request_done(struct nefit_easy* easy)
+/* dequeue current HTTP request and check if there is more work todo */
+static void request_done(struct nefit_easy *easy)
 {
 	struct request *req;
 
@@ -156,19 +214,24 @@ static void request_done(struct nefit_easy* easy)
 	check_pending_work(easy);
 }
 
-int easy_get(struct nefit_easy* easy, char const *url)
+/**
+ * @brief Queues a request. When idle the request is send immediately.
+ * @param easy The easy to queue the request for
+ * @param url The url to request
+ * @return 0 when successful
+ */
+int easy_get(struct nefit_easy *easy, char const *url)
 {
-    struct request *req	= (struct request *)calloc(1, sizeof(struct request));
+	struct request *req;
+
+    req = (struct request*) calloc(1, sizeof(struct request));
 	if (!req)
-		goto error;
+		return -1;
 
 	if (asprintf(&req->http_req,
 		"GET %s HTTP/1.0\r\n" \
 		"User-Agent: NefitEasy\r\n" \
 		"\r\n", url) < 0)
-		goto error;
-
-	if (asprintf(&req->description, "get %s", url) < 0)
 		goto error;
 
 	if (!req->http_req)
@@ -185,13 +248,103 @@ error:
 	return -1;
 }
 
+/**
+ * @brief Queues a put. When idle the command is send immediately.
+ * @param easy The easy to queue the request for
+ * @param url The url to put
+ * @return 0 when successful
+ */
+int easy_put_object(struct nefit_easy *easy, char const *url, struct json_object *obj)
+{
+	struct request *req;
+	char const *json_txt;
+	unsigned char *encrypted;
+	size_t encrypted_len;
+	char *payload;
+
+    req = (struct request*)calloc(1, sizeof(struct request));
+	if (!req)
+		return -1;
+
+	json_txt = json_object_to_json_string(obj);
+	if (!json_txt)
+		goto error;
+
+	/*
+	 * First encrypt the json string, it can be slightly longer, encrypted_len
+	 * contains the actual length.
+	 */
+	encrypted = encrypt(easy, (unsigned char const *) json_txt, strlen(json_txt), &encrypted_len);
+	if (encrypted == NULL)
+		goto error;
+
+	payload = xmpp_base64_encode(easy->xmpp_ctx, encrypted, encrypted_len);
+	free(encrypted);
+
+	if (asprintf(&req->http_req,
+		"PUT %s HTTP/1.0\n" \
+		"Content-Type: application/json\n" \
+		"Content-Length: %d\n" \
+		"User-Agent: NefitEasy\n" \
+		"\n\n\n" \
+		"%s", url, (int) strlen(payload), payload) < 0)
+		goto error;
+
+	if (!req->http_req)
+		goto error;
+
+	STAILQ_INSERT_TAIL(&easy->requests, req, next);
+	check_pending_work(easy);
+
+	return 0;
+
+error:
+	free(req->http_req);
+	free(req);
+	return -1;
+}
+
+int easy_put_double(struct nefit_easy *easy, char const *url, double value)
+{
+	struct json_object *obj;
+	int ret;
+
+	obj = json_object_new_object();
+	if (obj == NULL)
+		return -1;
+
+	json_object_object_add(obj, "value", json_object_new_double(value));
+	ret = easy_put_object(easy, url, obj);
+	json_object_put(obj);
+
+	return ret;
+}
+
+int easy_put_string(struct nefit_easy *easy, char const *url, char const *value)
+{
+	struct json_object *obj;
+	int ret;
+
+	obj = json_object_new_object();
+	if (obj == NULL)
+		return -1;
+
+	json_object_object_add(obj, "value", json_object_new_string(value));
+	ret = easy_put_object(easy, url, obj);
+	json_object_put(obj);
+
+	return ret;
+}
+
+
+/* ping_handler, answers remote ping request to keep the connection alive */
 static int ping_handler(xmpp_conn_t *conn, xmpp_stanza_t *stanza, void *userdata)
 {
 	struct nefit_easy *easy = (struct nefit_easy *) userdata;
 	xmpp_ctx_t *ctx = easy->xmpp_ctx;
 	xmpp_stanza_t *pong;
-
 	char const *id, *to, *from;
+
 	id = xmpp_stanza_get_attribute(stanza, "id");
 	to = xmpp_stanza_get_attribute(stanza, "to");
 	from = xmpp_stanza_get_attribute(stanza, "from");
@@ -211,7 +364,8 @@ static int ping_handler(xmpp_conn_t *conn, xmpp_stanza_t *stanza, void *userdata
 	return 1;
 }
 
-static int message_handler(xmpp_conn_t * const conn, xmpp_stanza_t * const stanza, void * const userdata)
+static int message_handler(xmpp_conn_t * const conn,
+						   xmpp_stanza_t * const stanza, void * const userdata)
 {
 	//struct nefit_easy *easy = (struct nefit_easy *) userdata;
 	EASY_UNUSED(userdata);
@@ -222,8 +376,8 @@ static int message_handler(xmpp_conn_t * const conn, xmpp_stanza_t * const stanz
 }
 
 /* define a handler for connection events */
-static void conn_handler(xmpp_conn_t * conn, xmpp_conn_event_t status,
-				int error, xmpp_stream_error_t * stream_error, void *userdata)
+static void conn_handler(xmpp_conn_t *conn, xmpp_conn_event_t status,
+				int error, xmpp_stream_error_t *stream_error, void *userdata)
 {
 	struct nefit_easy *easy = (struct nefit_easy *) userdata;
 	xmpp_ctx_t *ctx = easy->xmpp_ctx;
@@ -232,7 +386,7 @@ static void conn_handler(xmpp_conn_t * conn, xmpp_conn_event_t status,
 
 	easy->connected = status == XMPP_CONN_CONNECT;
 	if (easy->connected) {
-		xmpp_stanza_t* pres;
+		xmpp_stanza_t *pres;
 		fprintf(stderr, "DEBUG: connected\n");
 		xmpp_handler_add(conn, message_handler, NULL, "presence", NULL, easy);
 		xmpp_handler_add(conn, ping_handler, "urn:xmpp:ping", "iq", "get", easy);
@@ -251,6 +405,16 @@ static void conn_handler(xmpp_conn_t * conn, xmpp_conn_event_t status,
 	}
 }
 
+/**
+ * @brief connect to a remote thermostat by xmpp
+ * @param easy			the instance of this easy, can be uninitialized
+ * @param serial		the thermostat to connect to, serial is printed in the manual e.g.
+ * @param access_key	allows access to the broker in the first place, also
+ *						printed in the manual
+ * @param password		user chosen, used as part of the payload encryption
+ * @param cb			function where received values are reported to
+ * @return				0 when successful
+ */
 int easy_connect(struct nefit_easy *easy, char const *serial, char const *access_key,
 				 char const *password, netif_easy_callback *cb)
 {
@@ -270,23 +434,23 @@ int easy_connect(struct nefit_easy *easy, char const *serial, char const *access
 
 	/* create a connection */
 	easy->xmpp_conn = xmpp_conn_new(easy->xmpp_ctx);
-    easy->cb = cb;
+	easy->cb = cb;
 
-    if (xmpp_conn_set_flags(easy->xmpp_conn, XMPP_CONN_FLAG_MANDATORY_TLS) != 0)
-        return -1;
+	if (xmpp_conn_set_flags(easy->xmpp_conn, XMPP_CONN_FLAG_MANDATORY_TLS) != 0)
+		return -1;
 
-    /* setup authentication information */
-    asprintf(&jid, "rrccontact_%s@%s", serial, host);
-    asprintf(&easy->gateway, "rrcgateway_%s@%s", serial, host);
-    xmpp_conn_set_jid(easy->xmpp_conn, jid);
-    free(jid);
+	/* setup authentication information */
+	asprintf(&jid, "rrccontact_%s@%s", serial, host);
+	asprintf(&easy->gateway, "rrcgateway_%s@%s", serial, host);
+	xmpp_conn_set_jid(easy->xmpp_conn, jid);
+	free(jid);
 
-    asprintf(&pass, "Ct7ZR03b_%s", access_key);
-    xmpp_conn_set_pass(easy->xmpp_conn, pass);
-    free(pass);
+	asprintf(&pass, "Ct7ZR03b_%s", access_key);
+	xmpp_conn_set_pass(easy->xmpp_conn, pass);
+	free(pass);
 
-    /* initiate connection */
-    xmpp_connect_client(easy->xmpp_conn, 0, 0, conn_handler, easy);
+	/* initiate connection */
+	xmpp_connect_client(easy->xmpp_conn, 0, 0, conn_handler, easy);
 
-    return 0;
+	return 0;
 }

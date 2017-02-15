@@ -46,7 +46,6 @@ void *TcpServerThread(void *threadarg) //creates a blocking tcp server
 
     i=0;
     do {      // bind the socket to the port number
-        //sockin.sin_port 	= htons(TCP_IP_PORT+i);  //Host TO Network Short :Convert port number to "network byte order" MOST SIGNIFICANT BYTE FIRST
         sockin.sin_port 	= htons(TCP_IP_PORT+i);  //Host TO Network Short :Convert port number to "network byte order" MOST SIGNIFICANT BYTE FIRST
         bound= (bind (listening_socket, (__CONST_SOCKADDR_ARG)&sockin, sizeof(sockin)) == 0);
     }	while (++i<=4 && !bound );
@@ -137,7 +136,7 @@ void *TcpServerThread(void *threadarg) //creates a blocking tcp server
     close(listening_socket);
     tcpclient.Close();
     nrRunningThreads--;
-    cout<<"TCP Listening client socket closed; ";
+    cout<<"TCP Listening server socket closed; ";
     pthread_exit(NULL);
     return NULL;
 }
