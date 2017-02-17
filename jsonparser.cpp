@@ -1,11 +1,18 @@
-#include "easyheader.hpp"
+//#include "nefit-easy.h"
 #include <jsonparser.hpp>
+#include <main.hpp>
+#include "Tcp.hpp"
 #include <string>
 
+//extern TcpClient	tcpclient;
+extern TcpServer	 *tcpserver;
+extern bool tcpserver_connected;
+extern unsigned int nr_values_to_obtain;
 //#define LOGPARSER
 
-using namespace  std;
-extern char *paths[];
+using namespace     std;
+extern char         *paths[];
+extern xmpp_ctx_t   *ctx;
 
 string unescape(const string& s);
 
@@ -35,15 +42,28 @@ void value_obtained(struct nefit_easy *easy, json_object *obj)
    if (strg==paths[NEFIT_USR_INTERFACESTATUS])
     {   subobj = json_object_object_get(json_object_object_get(jobj, "value"), "IHT");
         printf("roomtemp: %s deg C\n", json_object_get_string(subobj));
+        if (tcpserver_connected){
+             strg="Voork.temp: ";
+             strg=strg+json_object_get_string(subobj);
+             //strg.resize(strg.length()-1);
+             tcpserver->send(strg);
+             printf ("is connected!\n");
+        }
+        nr_values_to_obtain--;
+
     }
     if (strg==paths[NEFIT_SYSTEM_PRESSURE])
     {   subobj = json_object_object_get(jobj, "value");
         printf("pressure: %s bar\n", json_object_get_string(subobj));
+         nr_values_to_obtain--;
     }
     if (strg==paths[NEFIT_OUTDOOR_TEMPERATURE])
     {   subobj = json_object_object_get(jobj, "value");
         printf("outdoor temperature: %s degC\n", json_object_get_string(subobj));
+        nr_values_to_obtain--;
     }
+    if (nr_values_to_obtain==0)
+        xmpp_stop (ctx);
 
 }
 

@@ -9,6 +9,9 @@
 
 //#include <string.h>
 #include "Tcp.hpp"
+#include "main.hpp"
+#include <nefit-easy.h>
+
 using namespace std;
 
 char     tcpclient_incoming_message[TCP_MESSBUF_SIZE];  // buffer used for incomming message
@@ -23,6 +26,10 @@ extern bool         keepThreadsRunning;
 extern unsigned int nrRunningThreads;
 extern sockaddr     pin;
 extern int          socket_descriptor_current;
+extern char         **paths;
+extern xmpp_ctx_t   *ctx_t;
+extern struct nefit_easy easy;
+extern unsigned int nr_values_to_obtain;
 
 
 
@@ -74,9 +81,10 @@ void *TcpServerThread(void *threadarg) //creates a blocking tcp server
       printf("Client accepted, from IP address and portnumber client: %i.%i.%i.%i:%i\n\r",(int)(unsigned char)pin.sa_data[2],(int)(unsigned char)pin.sa_data[3],(int)(unsigned char)pin.sa_data[4],(int)(unsigned char)pin.sa_data[5],peerport);
       client_did_not_close_connection=true;
       tcpserver_connected=true;
+
       struct sockaddr_in *spin = (struct sockaddr_in *) &pin;
       in_addr_t serverip=(in_addr_t)spin->sin_addr.s_addr;
-      tcpclient.SetHostSocketAddress(serverip);
+      //tcpclient.SetHostSocketAddress(serverip);
 
 
       while(client_did_not_close_connection){                                 //while client did not order to close the connection
@@ -89,7 +97,7 @@ void *TcpServerThread(void *threadarg) //creates a blocking tcp server
                 std::exit(1);
           }
           tcpserver_incoming_message[len_incoming]=0;
-          printf("Message recieved:%s\n\r",tcpserver_incoming_message);
+          printf("\nMessage recieved:%s",tcpserver_incoming_message);
           if (tcpServer.strcmp_recieved_tcp_data("Quit")){
                 client_did_not_close_connection=false;
                 keepThreadsRunning=false;
@@ -129,12 +137,12 @@ void *TcpServerThread(void *threadarg) //creates a blocking tcp server
         close(socket_descriptor_current);
         printf("TCP server socket closed\n");
         tcpserver_incoming_message[0]=0;
-        tcpclient.Close();
+        //tcpclient.Close();
 
     }   //while mainprogram is not closing : awaiting next client
         //until main thread wants to close
     close(listening_socket);
-    tcpclient.Close();
+    //tcpclient.Close();
     nrRunningThreads--;
     cout<<"TCP Listening server socket closed; ";
     pthread_exit(NULL);
@@ -245,10 +253,13 @@ TcpServer::TcpServer(int socket_nr,int sock_desc_currrent)
 bool TcpServer::process_socket()  						//returns true on recognized order, false otherise
 {  char error_answer[25] = "400 Order not recognized";
    char ok_answer   [4]	 = "OK!";
-   int				answer,i,nr;
+   //int				i,nr;
    // orders    "EasyInfo"  "Set Temp  ##.#"
    if (strcmp_recieved_tcp_data("EasyInfo")) {
        send(ok_answer);
+       easy_get(&easy,"/ecus/rrc/uiStatus");
+       nr_values_to_obtain++;
+       xmpp_run(easy.xmpp_ctx);     //waiting for answers on my calls above in the easy_get function calls
        return true;
    }
 

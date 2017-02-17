@@ -11,6 +11,8 @@
 
 #include <nefit-easy.h>
 
+//struct nefit_easy easy;
+
 static void request_done(struct nefit_easy *easy);
 
 const unsigned char magic[] = {
