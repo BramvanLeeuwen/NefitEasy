@@ -256,7 +256,7 @@ bool TcpServer::process_socket()  						//returns true on recognized order, fals
    //int				i,nr;
    // orders    "EasyInfo"  "Set Temp  ##.#"
    if (strcmp_recieved_tcp_data("EasyInfo")) {
-       send(ok_answer);
+       //send(ok_answer);
        easy_get(&easy,"/ecus/rrc/uiStatus");
        nr_values_to_obtain++;
        xmpp_run(easy.xmpp_ctx);     //waiting for answers on my calls above in the easy_get function calls

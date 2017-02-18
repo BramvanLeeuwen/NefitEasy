@@ -42,12 +42,11 @@ void value_obtained(struct nefit_easy *easy, json_object *obj)
    if (strg==paths[NEFIT_USR_INTERFACESTATUS])
     {   subobj = json_object_object_get(json_object_object_get(jobj, "value"), "IHT");
         printf("roomtemp: %s deg C\n", json_object_get_string(subobj));
-        if (tcpserver_connected){
-             strg="Voork.temp: ";
-             strg=strg+json_object_get_string(subobj);
-             //strg.resize(strg.length()-1);
+        strg="kamertemperatuur: ";
+        strg=strg+json_object_get_string(subobj);
+       if (tcpserver_connected){
              tcpserver->send(strg);
-             printf ("is connected!\n");
+             //printf ("is connected!\n");
         }
         nr_values_to_obtain--;
 
