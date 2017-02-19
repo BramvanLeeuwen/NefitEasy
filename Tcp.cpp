@@ -10,7 +10,7 @@
 //#include <string.h>
 #include "Tcp.hpp"
 #include "main.hpp"
-#include <nefit-easy.h>
+#include "nefit-easy.h"
 
 using namespace std;
 
@@ -22,132 +22,16 @@ extern char     client_tcpsocket;
 extern TcpClient	tcpclient;
 extern int          tcpserver_internal_portnr;
 extern bool         tcpserver_connected; //true when tcp socket is bound to external socket
-extern bool         keepThreadsRunning;
-extern unsigned int nrRunningThreads;
 extern sockaddr     pin;
 extern int          socket_descriptor_current;
-extern char         **paths;
+extern char         *paths[];
 extern xmpp_ctx_t   *ctx_t;
 extern struct nefit_easy easy;
 extern unsigned int nr_values_to_obtain;
 
 
 
-void *TcpServerThread(void *threadarg) //creates a blocking tcp server
-//thread lives as long as the main program does not close
-{
-    int				listening_socket,len_incoming,i;
-    unsigned int  	addrlen;
-    sockaddr_in 	sockin;
-    //sockaddr 		pin;   global variable
-    bool			client_did_not_close_connection,bound=false;
-    threadarg=threadarg; //to appease the compiler (avoid warning)
 
-    listening_socket=  socket(AF_INET,SOCK_STREAM,0);
-    if (listening_socket <0)
-        printf("Error in opening socket\n\r");
-
-    memset(&sockin, 0, sizeof(sockin));     // complete the socket structure
-    sockin.sin_family 		= AF_INET;   	//allows for other network protocols
-    sockin.sin_addr.s_addr 	= INADDR_ANY;	//0
-
-    i=0;
-    do {      // bind the socket to the port number
-        sockin.sin_port 	= htons(TCP_IP_PORT+i);  //Host TO Network Short :Convert port number to "network byte order" MOST SIGNIFICANT BYTE FIRST
-        bound= (bind (listening_socket, (__CONST_SOCKADDR_ARG)&sockin, sizeof(sockin)) == 0);
-    }	while (++i<=4 && !bound );
-    tcpserver_internal_portnr=TCP_IP_PORT+i-1;
-    if (!bound){
-        perror("tcp server didn't bind");
-        std::exit(1);
-    }
-
-    if (listen(listening_socket, 5) == -1){    // show that we are willing to listen
-        perror("listen");
-        std::exit(1);
-    }
-
-    while (keepThreadsRunning)
-    { printf("Waiting to accept a client\n");
-      addrlen = sizeof(pin);
-      //	wait for a new client to welcome the client
-      socket_descriptor_current= accept(listening_socket,&pin, &addrlen);    //socket_descriptor_current is the actual socket descriptor for communication with this client
-      if (socket_descriptor_current == -1){
-            perror("accept");
-            std::exit(1);
-      }
-      TcpServer   tcpServer(listening_socket,socket_descriptor_current);
-      int   peerport=((int)(unsigned char)pin.sa_data[0])*256+(int)(unsigned char)pin.sa_data[1];
-      printf("Client accepted, from IP address and portnumber client: %i.%i.%i.%i:%i\n\r",(int)(unsigned char)pin.sa_data[2],(int)(unsigned char)pin.sa_data[3],(int)(unsigned char)pin.sa_data[4],(int)(unsigned char)pin.sa_data[5],peerport);
-      client_did_not_close_connection=true;
-      tcpserver_connected=true;
-
-      struct sockaddr_in *spin = (struct sockaddr_in *) &pin;
-      in_addr_t serverip=(in_addr_t)spin->sin_addr.s_addr;
-      //tcpclient.SetHostSocketAddress(serverip);
-
-
-      while(client_did_not_close_connection){                                 //while client did not order to close the connection
-          // wait for the client to accept (next) order
-          // get the message from the client
-          printf("Awaiting next order from (peer)client\n");
-          len_incoming=recv(socket_descriptor_current, tcpserver_incoming_message, TCP_MESSBUF_SIZE-1, 0);
-          if (len_incoming == -1){
-                perror("recv");
-                std::exit(1);
-          }
-          tcpserver_incoming_message[len_incoming]=0;
-          printf("\nMessage recieved:%s",tcpserver_incoming_message);
-          if (tcpServer.strcmp_recieved_tcp_data("Quit")){
-                client_did_not_close_connection=false;
-                keepThreadsRunning=false;
-          }
-          else
-          if (tcpServer.strcmp_recieved_tcp_data("Close"))
-                client_did_not_close_connection=false;
-              //client wants to close the socket: close up both sockets
-          else
-              // otherwise process the incoming order
-              // process order  return 1 if order is valid and processed
-          {   if (tcpServer.process_socket())
-                  // return 1 on non valid order
-                  // answering..: send message
-                    printf("Order processed.\n");
-              else{
-                    printf("Invalid order recieved from client! Length %i.\n",len_incoming);
-                    if (len_incoming== 0){
-                        client_did_not_close_connection=false;
-                        printf("Client disconnected?\n");
-                    }
-              }
-
-            }
-            //printf("1: Test before end while cient didnt close\n");
-
-        } //end while client did notclose connection
-        // close up both sockets
-
-        printf("Connection is closed by client on: %i.%i.%i.%i:%i\n",(int)(unsigned char)pin.sa_data[2],(int)(unsigned char)pin.sa_data[3],(int)(unsigned char)pin.sa_data[4],(int)(unsigned char)pin.sa_data[5],peerport);
-        strcpy(tcpserver_outgoing_message,"203 Server socket closed\n");
-        if (send(socket_descriptor_current, tcpserver_outgoing_message,strlen(tcpserver_outgoing_message), 0) == -1) {
-                perror("send");
-                std::exit(1);}// give client a chance to properly shutdown
-        tcpserver_connected=false;
-        sleep(1);
-        close(socket_descriptor_current);
-        printf("TCP server socket closed\n");
-        tcpserver_incoming_message[0]=0;
-        //tcpclient.Close();
-
-    }   //while mainprogram is not closing : awaiting next client
-        //until main thread wants to close
-    close(listening_socket);
-    //tcpclient.Close();
-    nrRunningThreads--;
-    cout<<"TCP Listening server socket closed; ";
-    pthread_exit(NULL);
-    return NULL;
-}
 
 //____________________________________________________________________________________________
 //____________________________________________________________________________________________
@@ -222,7 +106,7 @@ void TcpClient::Close()
 void TcpClient::SendTCPClient(const string& str)
 {	strcpy(tcpclient_outgoing_message,str.c_str());
     unsigned int    length=strlen(tcpclient_outgoing_message);
-    if (tcpclient_outgoing_message[length-2]!='\n' )
+    if (tcpclient_outgoing_message[length-1]!='\n' )
         tcpclient_outgoing_message[length++]='\n';
     tcpclient_outgoing_message[length]=0;
     if (send(client_tcpsocket,tcpclient_outgoing_message,length,0) !=(int)length){
@@ -257,7 +141,11 @@ bool TcpServer::process_socket()  						//returns true on recognized order, fals
    // orders    "EasyInfo"  "Set Temp  ##.#"
    if (strcmp_recieved_tcp_data("EasyInfo")) {
        //send(ok_answer);
-       easy_get(&easy,"/ecus/rrc/uiStatus");
+       easy_get(&easy,paths[1]);
+       nr_values_to_obtain++;
+       easy_get(&easy,paths[0]);
+       nr_values_to_obtain++;
+       easy_get(&easy,paths[2]);
        nr_values_to_obtain++;
        xmpp_run(easy.xmpp_ctx);     //waiting for answers on my calls above in the easy_get function calls
        return true;
@@ -275,13 +163,15 @@ void TcpServer::SetSocketDescriptors(int socket_nr,int sock_desc_currrent)
 }
 
 bool TcpServer::strcmp_recieved_tcp_data(char const* str)
-{ return
-   strncmp(tcpserver_incoming_message,str,strlen(str)+1)==0;
+{   return
+       strncmp(tcpserver_incoming_message,str,strlen(str)+1)==0;
 }
 
 void TcpServer::send(string& str)
 { char buff[1024];
-  str.copy(buff,str.length(),(string::size_type)0);
+  string::size_type len=str.length();
+  str.copy(buff,len,(string::size_type)0);
+  buff[len]=0;
   send(buff);
 }
 

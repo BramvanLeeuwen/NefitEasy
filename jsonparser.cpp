@@ -3,6 +3,7 @@
 #include <main.hpp>
 #include "Tcp.hpp"
 #include <string>
+#include <iostream>
 
 //extern TcpClient	tcpclient;
 extern TcpServer	 *tcpserver;
@@ -41,24 +42,31 @@ void value_obtained(struct nefit_easy *easy, json_object *obj)
      // printf("%s\n", paths[1]);
    if (strg==paths[NEFIT_USR_INTERFACESTATUS])
     {   subobj = json_object_object_get(json_object_object_get(jobj, "value"), "IHT");
-        printf("roomtemp: %s deg C\n", json_object_get_string(subobj));
+        //printf("roomtemp: %s deg C\n", json_object_get_string(subobj));
         strg="kamertemperatuur: ";
-        strg=strg+json_object_get_string(subobj);
-       if (tcpserver_connected){
+        strg=strg+json_object_get_string(subobj)+" deg C\n";
+        cout<<strg;
+       if (tcpserver_connected)
              tcpserver->send(strg);
-             //printf ("is connected!\n");
-        }
         nr_values_to_obtain--;
 
     }
     if (strg==paths[NEFIT_SYSTEM_PRESSURE])
     {   subobj = json_object_object_get(jobj, "value");
         printf("pressure: %s bar\n", json_object_get_string(subobj));
+        strg="waterdruk: ";
+        strg=strg+json_object_get_string(subobj)+" bar\n";
+       if (tcpserver_connected)
+             tcpserver->send(strg);
          nr_values_to_obtain--;
     }
     if (strg==paths[NEFIT_OUTDOOR_TEMPERATURE])
     {   subobj = json_object_object_get(jobj, "value");
         printf("outdoor temperature: %s degC\n", json_object_get_string(subobj));
+        strg="buitentemperatuur: ";
+        strg=strg+json_object_get_string(subobj)+" deg C\n";
+       if (tcpserver_connected)
+             tcpserver->send(strg);
         nr_values_to_obtain--;
     }
     if (nr_values_to_obtain==0)

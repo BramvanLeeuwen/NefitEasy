@@ -121,7 +121,7 @@ int          client_tcpsocket,tcp_ip_port;
 sockaddr	 pin;
 bool		 tcpserver_connected;  //true when tcp socket is bound to external socket
  TcpServer	 *tcpserver;
-bool		 keepThreadsRunning;
+bool		 keepProgramRunning;
 unsigned int nrRunningThreads;
 int          tcpserver_internal_portnr=-1;
 int          socket_descriptor_current;
@@ -149,7 +149,7 @@ int main(int argc, char **argv)
     //int                 rc, i;
 
     tcpserver_connected=false;
-    keepThreadsRunning= true;
+    keepProgramRunning= true;
     //easyptr=&easy;
     EASY_UNUSED(argc);
     EASY_UNUSED(argv);
@@ -264,7 +264,7 @@ void TcpServerLoop() //creates a blocking tcp server
         exit(1);
     }
 
-    while (keepThreadsRunning)
+    while (keepProgramRunning)
     { printf("Waiting to accept a client\n");
       addrlen = sizeof(pin);
       //	wait for a new client to welcome the client
@@ -297,7 +297,7 @@ void TcpServerLoop() //creates a blocking tcp server
           printf("Message recieved:%s\n\r",tcpserver_incoming_message);
           if (tcpServer.strcmp_recieved_tcp_data("Quit")){
                 client_did_not_close_connection=false;
-                keepThreadsRunning=false;
+                keepProgramRunning=false;
           }
           else
           if (tcpServer.strcmp_recieved_tcp_data("Close"))
